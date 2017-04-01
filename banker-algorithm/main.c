@@ -31,7 +31,7 @@ int tryBanker(int numOfProcesses, int numOfResources, int *available, int **allo
 			continue;
 
 		for (int j = 0; j < numOfResources; ++j)
-			available[j] = available[j] + allocated[i][j];
+			available[j] += allocated[i][j];
 
 		return i;
 	}
@@ -43,11 +43,14 @@ int isSafeState(int numOfProcesses, int numOfResources, int *available, int **al
 {
 	int numTerminated = 0;
 	int *terminated = (int *)malloc(numOfProcesses * sizeof(int));
+	int *curAvailable = (int *)malloc(numOfResources * sizeof(int));
+
 	memset(terminated, 0, numOfProcesses * sizeof(int));
+	memcpy(curAvailable, available, numOfResources * sizeof(int));
 
 	while (numTerminated < numOfProcesses)
 	{
-		int process = tryBanker(numOfProcesses, numOfResources, available, allocated, need, terminated);
+		int process = tryBanker(numOfProcesses, numOfResources, curAvailable, allocated, need, terminated);
 
 		if (process == -1)
 			break;
@@ -57,6 +60,7 @@ int isSafeState(int numOfProcesses, int numOfResources, int *available, int **al
 	}
 
 	free(terminated);
+	free(curAvailable);
 
 	return (numTerminated == numOfProcesses);
 }
@@ -113,32 +117,39 @@ int main()
 		if (!numOfRequests)
 			break;
 
-		for (int req = 0; req < numOfRequests; ++req)
+		for (int i = 0; i < numOfResources; ++i)
+			reqAvailable[i] = available[i];
+
+		for (int i = 0; i < numOfProcesses; ++i)
+			for (int j = 0; j < numOfResources; ++j)
+			{
+				reqAllocated[i][j] = allocated[i][j];
+				reqNeed[i][j] = need[i][j];
+			}
+
+		for (int req = 0, failed = 0; req < numOfRequests; ++req)
 		{
 			scanf("%d", &process);
 
 			for (int i = 0; i < numOfResources; ++i)
 				scanf("%d", request + i);
 
+			if (failed)
+				continue;
+
 			printf("Request #%d: ", req + 1);
 
-			if (!requestCanBeGranted(process, numOfResources, available, need, request))
+			if (!requestCanBeGranted(process, numOfResources, reqAvailable, reqNeed, request))
 			{
 				printf("Overneeded or not enough resources\n");
+				failed = 1;
 
 				continue;
 			}
 
-			for (int i = 0; i < numOfProcesses; ++i)
-				for (int j = 0; j < numOfResources; ++j)
-				{
-					reqAllocated[i][j] = allocated[i][j];
-					reqNeed[i][j] = need[i][j];
-				}
-
 			for (int i = 0; i < numOfResources; ++i)
 			{
-				reqAvailable[i] = available[i] - request[i];
+				reqAvailable[i] -= request[i];
 				reqAllocated[process][i] += request[i];
 				reqNeed[process][i] -= request[i];
 			}
@@ -151,7 +162,12 @@ int main()
 				printf("\n");
 			}
 			else
+			{
 				printf("Unsafe\n");
+				failed = 1;
+				
+				continue;
+			}
 		}
 
 		printf("\n");
